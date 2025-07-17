@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IBBUL Satellite Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 12px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      font-family: sans-serif;
+    }
+
+    #map {
+      height: 100vh;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      z-index: 2000;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 20px;
+      border-radius: 12px;
+      display: none;
+      font-weight: bold;
+      font-family: sans-serif;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="controls">
+    <label for="locationSelect">🎯 Choose Destination:</label><br/>
+    <select id="locationSelect">
+      <option value="">--Select--</option>
+    </select><br/><br/>
+    <label>
+      <input type="checkbox" id="useCurrent"> 🧍‍♂️ Use My Current Location
+    </label><br/><br/>
+    <button onclick="goToLocation()">Go</button>
+  </div>
+
+  <div id="loading">📍 Detecting your location...</div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.min.js"></script>
+
+  <script>
+    const map = L.map("map").setView([9.0679, 6.5706], 17);
+
+    // Satellite tiles
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 20,
+        attribution: 'Imagery © <a href="https://www.esri.com/">Esri</a>'
+      }
+    ).addTo(map);
+
+    const locations = {
+      Big_Gate: [9.06685006184045, 6.568247586647766],
+      Senate: [9.067862542901691, 6.570384093708574],
+      Library: [9.069285053789647, 6.57103804323958],
+      SLT: [9.065547156049382, 6.570761926636074],
+      MLT: [9.064251583201543, 6.572350698928983],
+      ICT: [9.069024577835838, 6.5734350187146475],
+      Security_Office: [9.066739111216073, 6.569532798306859],
+      CSC_Dept: [9.067041212876179, 6.571788182637907],
+      E_Learning: [9.067743733217956, 6.572995416566357],
+      TLT: [9.063629094648975, 6.5710078393029505],
+      NALT: [9.063824432219612, 6.573652507224033],
+      FEMALE_HOSTEL_A: [9.073190858776673, 6.569230108996649],
+      MALE_HOSTEL_B: [9.072646895164088, 6.568421707044225],
+      FEMALE_HOSTEL_C: [9.072051848763548, 6.5692933028353115],
+      FEMALE_HOSTEL_NEW_A: [9.072944417994293, 6.570423149231164],
+      FEMALE_HOSTEL_NEW_B: [9.072556575684674, 6.570137997521734],
+      CENTRAL_MOSQUE: [9.073163299346092, 6.5721420158738235]
+    };
+
+    const dropdown = document.getElementById("locationSelect");
+    const loading = document.getElementById("loading");
+    const useCurrent = document.getElementById("useCurrent");
+
+    Object.entries(locations).forEach(([name, coords]) => {
+      L.marker(coords).addTo(map).bindPopup(name.replace(/_/g, " "));
+      const option = document.createElement("option");
+      option.value = name;
+      option.text = name.replace(/_/g, " ");
+      dropdown.appendChild(option);
+    });
+
+    let userLatLng = null;
+    let currentRoute = null;
+
+    function detectLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject("Geolocation not supported.");
+
+        loading.style.display = "block";
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const coords = pos.coords;
+            const latlng = L.latLng(coords.latitude, coords.longitude);
+            userLatLng = latlng;
+            L.marker(latlng).addTo(map).bindPopup("📍 You are here").openPopup();
+            loading.style.display = "none";
+            resolve(latlng);
+          },
+          (err) => {
+            loading.style.display = "none";
+            alert("⚠️ Unable to detect location. Using Big Gate as default.");
+            resolve(L.latLng(locations.Big_Gate));
+          }
+        );
+      });
+    }
+
+    async function goToLocation() {
+      const selected = dropdown.value;
+      if (!selected || !locations[selected]) return;
+
+      const end = L.latLng(locations[selected]);
+
+      const start = useCurrent.checked
+        ? await detectLocation()
+        : L.latLng(locations.Big_Gate);
+
+      if (currentRoute) {
+        map.removeControl(currentRoute);
+      }
+
+      currentRoute = L.Routing.control({
+        waypoints: [start, end],
+        routeWhileDragging: false,
+        createMarker: function () { return null; }
+      }).addTo(map);
+
+      map.setView(end, 17);
+    }
+  </script>
+</body>
+</html>
